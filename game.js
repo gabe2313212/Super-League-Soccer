@@ -1,41 +1,44 @@
 /* =========================================================
    SUPER LEAGUE SOCCER
-   Complete game controller
+   COMPLETE GAME.JS
    ========================================================= */
 
 let game = createDefaultGame();
+
+/* =========================================================
+   DEFAULT GAME
+   ========================================================= */
 
 function createDefaultGame() {
   return {
     mode: null,
 
-    // Build a Roster
+    /* BUILD A ROSTER */
+    rosterLeague: "Premier League",
     rosterTeam: "",
     roster: [],
     rosterSeason: null,
     rosterStandings: [],
 
-    // Super Squad
+    /* SUPER SQUAD */
     squadName: "",
-    points: CONFIG.startingPoints || 100,
+    points: 100,
     wins: 0,
     draws: 0,
     losses: 0,
-
     collection: [],
     lineup: [],
-
     superDifficulty: "easy",
+
     squadSeason: null
   };
 }
 
 /* =========================================================
-   ICON DATABASE
-   Adds Icons without replacing your existing players.
+   30 ICONS
    ========================================================= */
 
-const EXTRA_ICONS = [
+const ICONS = [
   ["Pele", 98],
   ["Diego Maradona", 97],
   ["Ronaldo Nazario", 96],
@@ -68,18 +71,25 @@ const EXTRA_ICONS = [
   ["Bobby Charlton", 93]
 ];
 
-function addExtraIcons() {
-  if (!CONFIG.players) CONFIG.players = [];
+function addIcons() {
+  if (!CONFIG.players) {
+    CONFIG.players = [];
+  }
 
-  EXTRA_ICONS.forEach(([name, rating]) => {
+  ICONS.forEach(icon => {
+    const name = icon[0];
+    const rating = icon[1];
+
     const exists = CONFIG.players.some(
-      p => p.name.toLowerCase() === name.toLowerCase()
+      player =>
+        player.name &&
+        player.name.toLowerCase() === name.toLowerCase()
     );
 
     if (!exists) {
       CONFIG.players.push({
-        name,
-        rating,
+        name: name,
+        rating: rating,
         position: "ICON",
         team: "Icons",
         league: "Icons",
@@ -90,11 +100,11 @@ function addExtraIcons() {
 }
 
 /* =========================================================
-   STARTUP
+   START
    ========================================================= */
 
-document.addEventListener("DOMContentLoaded", () => {
-  addExtraIcons();
+document.addEventListener("DOMContentLoaded", function () {
+  addIcons();
 
   const saved = loadGame();
 
@@ -105,109 +115,115 @@ document.addEventListener("DOMContentLoaded", () => {
     };
   }
 
-  setupEventListeners();
-  renderAll();
+  setupEvents();
+  renderEverything();
+
   showScreen("mainMenu");
 });
 
 /* =========================================================
-   EVENT LISTENERS
+   EVENTS
    ========================================================= */
 
-function setupEventListeners() {
+function setupEvents() {
+
   bind("resetGame", "click", resetGame);
 
-  bind("rosterTeam", "change", renderRosterPlayers);
+  /* ROSTER */
+  bind("rosterTeam", "change", function () {
+    game.rosterTeam = this.value;
+    game.roster = [];
+    renderRosterPlayers();
+    updateRosterCount();
+    saveGame(game);
+  });
+
   bind("startRosterSeason", "click", startRosterSeason);
+
   bind("playRosterMatch", "click", playRosterMatch);
 
+  /* SUPER SQUAD */
   bind("createTeamButton", "click", createSuperTeam);
-  bind("bronzePack", "click", () => openPack("bronze"));
-  bind("goldPack", "click", () => openPack("gold"));
+
+  bind("bronzePack", "click", function () {
+    openPack("bronze");
+  });
+
+  bind("goldPack", "click", function () {
+    openPack("gold");
+  });
+
   bind("playSuperMatch", "click", playSuperMatch);
 
-  bind("backFromRoster", "click", () => openMode("mainMenu"));
-  bind("backFromSquad", "click", () => openMode("mainMenu"));
+  /* BACK BUTTONS */
+  bind("backFromRoster", "click", function () {
+    openMode("mainMenu");
+  });
+
+  bind("backFromSquad", "click", function () {
+    openMode("mainMenu");
+  });
 }
 
-function bind(id, event, fn) {
+function bind(id, event, callback) {
   const element = document.getElementById(id);
 
   if (element) {
-    element.addEventListener(event, fn);
+    element.addEventListener(event, callback);
   }
 }
 
 /* =========================================================
-   SCREEN CONTROL
+   SCREEN SYSTEM
    ========================================================= */
 
-function openMode(modeId) {
-  if (modeId === "rosterMode") {
+function openMode(mode) {
+
+  if (mode === "rosterMode") {
     openRosterMode();
     return;
   }
 
-  if (modeId === "superSquadMode") {
+  if (mode === "superSquadMode") {
     openSuperSquadMode();
     return;
   }
 
-  showScreen(modeId);
+  showScreen(mode);
 }
 
 window.openMode = openMode;
 
 function showScreen(id) {
-  const screens = document.querySelectorAll(".screen");
 
-  screens.forEach(screen => {
+  document.querySelectorAll(".screen").forEach(screen => {
     screen.classList.remove("active");
     screen.classList.add("hidden");
     screen.style.display = "none";
   });
 
-  const target = document.getElementById(id);
+  const screen = document.getElementById(id);
 
-  if (!target) return;
+  if (!screen) {
+    console.error("Screen not found:", id);
+    return;
+  }
 
-  target.classList.remove("hidden");
-  target.classList.add("active");
-  target.style.display = "block";
-}
-
-function openRosterMode() {
-  game.mode = "roster";
-
-  showScreen("rosterMode");
-
-  populateRosterTeams();
-  renderRosterPlayers();
-  renderRosterSeason();
-  renderRosterStandings();
-
-  saveGame(game);
-}
-
-function openSuperSquadMode() {
-  game.mode = "superSquad";
-
-  showScreen("superSquadMode");
-
-  renderSuperSquad();
-
-  saveGame(game);
+  screen.classList.remove("hidden");
+  screen.classList.add("active");
+  screen.style.display = "block";
 }
 
 /* =========================================================
-   RENDER EVERYTHING
+   MAIN RENDER
    ========================================================= */
 
-function renderAll() {
+function renderEverything() {
   populateRosterTeams();
   renderRosterPlayers();
   renderRosterSeason();
   renderRosterStandings();
+
   renderSuperSquad();
 }
 
@@ -215,17 +231,127 @@ function renderAll() {
    BUILD A ROSTER
    ========================================================= */
 
-function populateRosterTeams() {
+/*
+   IMPORTANT:
+   The HTML already has #rosterTeam.
+
+   We create a league selector automatically so you can choose:
+
+   Premier League
+   OR
+   LaLiga
+*/
+
+function createLeagueSelector() {
+
   const select = document.getElementById("rosterTeam");
 
   if (!select) return;
 
-  const teams = CONFIG.premierLeagueTeams || [];
+  let leagueSelector =
+    document.getElementById("rosterLeague");
 
-  const current = game.rosterTeam;
+  if (leagueSelector) return;
+
+  leagueSelector = document.createElement("select");
+
+  leagueSelector.id = "rosterLeague";
+  leagueSelector.className = "main-button";
+
+  leagueSelector.innerHTML = `
+    <option value="Premier League">
+      Premier League
+    </option>
+
+    <option value="LaLiga">
+      LaLiga
+    </option>
+  `;
+
+  select.parentNode.insertBefore(
+    leagueSelector,
+    select
+  );
+
+  leagueSelector.value =
+    game.rosterLeague || "Premier League";
+
+  leagueSelector.addEventListener(
+    "change",
+    function () {
+
+      game.rosterLeague = this.value;
+
+      game.rosterTeam = "";
+      game.roster = [];
+      game.rosterSeason = null;
+      game.rosterStandings = [];
+
+      populateRosterTeams();
+      renderRosterPlayers();
+      renderRosterSeason();
+      renderRosterStandings();
+
+      saveGame(game);
+    }
+  );
+}
+
+/* =========================================================
+   OPEN ROSTER
+   ========================================================= */
+
+function openRosterMode() {
+
+  game.mode = "roster";
+
+  showScreen("rosterMode");
+
+  createLeagueSelector();
+
+  populateRosterTeams();
+
+  renderRosterPlayers();
+  renderRosterSeason();
+  renderRosterStandings();
+
+  saveGame(game);
+}
+
+/* =========================================================
+   POPULATE TEAMS
+   ========================================================= */
+
+function populateRosterTeams() {
+
+  const select =
+    document.getElementById("rosterTeam");
+
+  if (!select) return;
+
+  const league =
+    game.rosterLeague || "Premier League";
+
+  let teams = [];
+
+  if (league === "LaLiga") {
+
+    teams =
+      CONFIG.laLigaTeams ||
+      [];
+
+  } else {
+
+    teams =
+      CONFIG.premierLeagueTeams ||
+      [];
+  }
 
   select.innerHTML = `
-    <option value="">Choose a Premier League team</option>
+    <option value="">
+      Choose a ${escapeHTML(league)} team
+    </option>
+
     ${teams.map(team => `
       <option value="${escapeHTML(team)}">
         ${escapeHTML(team)}
@@ -233,72 +359,161 @@ function populateRosterTeams() {
     `).join("")}
   `;
 
-  if (current && teams.includes(current)) {
-    select.value = current;
+  if (teams.includes(game.rosterTeam)) {
+    select.value = game.rosterTeam;
   }
 }
 
+/* =========================================================
+   GET PLAYERS FOR SELECTED TEAM
+   ========================================================= */
+
+function getRosterTeamPlayers(team) {
+
+  let players =
+    getPlayersFromTeam(team);
+
+  if (
+    players &&
+    players.length > 0
+  ) {
+    return players;
+  }
+
+  const league =
+    game.rosterLeague === "LaLiga"
+      ? "LaLiga"
+      : "Premier League";
+
+  players =
+    generateClubPlayers(
+      team,
+      league
+    );
+
+  return players || [];
+}
+
+/* =========================================================
+   RENDER PLAYERS
+   ========================================================= */
+
 function renderRosterPlayers() {
-  const container = document.getElementById("rosterPlayers");
-  const select = document.getElementById("rosterTeam");
 
-  if (!container || !select) return;
+  const container =
+    document.getElementById("rosterPlayers");
 
-  game.rosterTeam = select.value;
+  const teamSelect =
+    document.getElementById("rosterTeam");
 
-  if (!game.rosterTeam) {
-    container.innerHTML = "<p>Choose a team to see its players.</p>";
-    updateSelectedCount();
+  if (!container || !teamSelect) {
     return;
   }
 
-  let players = getPlayersFromTeam(game.rosterTeam);
+  const team =
+    teamSelect.value;
 
-  if (!players || players.length === 0) {
-    players = generateClubPlayers(
-      game.rosterTeam,
-      "Premier League"
-    );
+  game.rosterTeam = team;
+
+  if (!team) {
+
+    container.innerHTML = `
+      <div class="info-box">
+        Choose a league and team first.
+      </div>
+    `;
+
+    updateRosterCount();
+
+    return;
   }
 
-  container.innerHTML = players.map(player => {
-    const selected = game.roster.some(
+  const players =
+    getRosterTeamPlayers(team);
+
+  if (!players.length) {
+
+    container.innerHTML = `
+      <div class="info-box">
+        No players were found for this team.
+      </div>
+    `;
+
+    return;
+  }
+
+  container.innerHTML =
+    players.map(player => {
+
+      const selected =
+        game.roster.some(
+          selectedPlayer =>
+            selectedPlayer.name === player.name
+        );
+
+      return `
+        <button
+          class="player-card ${selected ? "selected" : ""}"
+          type="button"
+          onclick="selectRosterPlayer('${escapeJS(player.name)}')"
+        >
+
+          <strong>
+            ${escapeHTML(player.name)}
+          </strong>
+
+          <span>
+            ${escapeHTML(
+              player.position || "Player"
+            )}
+          </span>
+
+          <span>
+            Rating: ${player.rating}
+          </span>
+
+        </button>
+      `;
+
+    }).join("");
+
+  updateRosterCount();
+}
+
+/* =========================================================
+   SELECT ROSTER PLAYER
+   ========================================================= */
+
+function selectRosterPlayer(playerName) {
+
+  const player =
+    findPlayer(playerName);
+
+  if (!player) {
+    notify("Player could not be found.");
+    return;
+  }
+
+  const alreadySelected =
+    game.roster.some(
       p => p.name === player.name
     );
 
-    return `
-      <button
-        class="player-card ${selected ? "selected" : ""}"
-        onclick='toggleRosterPlayer(${JSON.stringify(player.name)})'
-      >
-        <strong>${escapeHTML(player.name)}</strong>
-        <span>${escapeHTML(player.position || "Player")}</span>
-        <span>Rating: ${player.rating}</span>
-      </button>
-    `;
-  }).join("");
-
-  updateSelectedCount();
-}
-
-window.toggleRosterPlayer = toggleRosterPlayer;
-
-function toggleRosterPlayer(playerName) {
-  const player = findPlayer(playerName);
-
-  if (!player) return;
-
-  const alreadySelected = game.roster.some(
-    p => p.name === player.name
-  );
-
   if (alreadySelected) {
-    game.roster = game.roster.filter(
-      p => p.name !== player.name
-    );
+
+    game.roster =
+      game.roster.filter(
+        p => p.name !== player.name
+      );
+
   } else {
+
     if (game.roster.length >= 6) {
-      notify("You can only select 6 players.");
+
+      notify(
+        "You already selected 6 players."
+      );
+
       return;
     }
 
@@ -306,127 +521,291 @@ function toggleRosterPlayer(playerName) {
   }
 
   renderRosterPlayers();
+  updateRosterCount();
+
   saveGame(game);
 }
 
-function updateSelectedCount() {
-  const count = document.getElementById("selectedCount");
+window.selectRosterPlayer =
+  selectRosterPlayer;
 
-  if (count) {
-    count.textContent = `${game.roster.length}/6 players selected`;
-  }
+/* =========================================================
+   COUNT
+   ========================================================= */
+
+function updateRosterCount() {
+
+  const count =
+    document.getElementById("selectedCount");
+
+  if (!count) return;
+
+  count.textContent =
+    `${game.roster.length}/6 players selected`;
 }
 
+/* =========================================================
+   START ROSTER SEASON
+   ========================================================= */
+
 function startRosterSeason() {
+
+  if (!game.rosterTeam) {
+
+    notify(
+      "Choose a team first."
+    );
+
+    return;
+  }
+
   if (game.roster.length !== 6) {
-    notify("Select exactly 6 players first.");
+
+    notify(
+      "Choose exactly 6 players."
+    );
+
     return;
   }
 
   game.rosterSeason = {
+
     match: 0,
+
     wins: 0,
+
     draws: 0,
+
     losses: 0,
+
     points: 0,
+
     results: []
+
   };
 
-  game.rosterStandings = createRosterStandings();
+  game.rosterStandings =
+    createLeagueStandings();
 
   renderRosterSeason();
+
   renderRosterStandings();
 
   saveGame(game);
 
-  notify("Season started!");
+  notify(
+    `${game.rosterTeam} season started!`
+  );
 }
 
+/* =========================================================
+   CREATE STANDINGS
+   ========================================================= */
+
+function createLeagueStandings() {
+
+  let teams = [];
+
+  if (game.rosterLeague === "LaLiga") {
+
+    teams =
+      CONFIG.laLigaTeams || [];
+
+  } else {
+
+    teams =
+      CONFIG.premierLeagueTeams || [];
+  }
+
+  return teams.map(team => ({
+
+    team: team,
+
+    played: 0,
+
+    wins: 0,
+
+    draws: 0,
+
+    losses: 0,
+
+    points: 0
+
+  }));
+}
+
+/* =========================================================
+   PLAY ROSTER MATCH
+   ========================================================= */
+
 function playRosterMatch() {
+
   if (!game.rosterSeason) {
-    notify("Start your season first.");
+
+    notify(
+      "Start your season first."
+    );
+
     return;
   }
 
-  if (game.rosterSeason.match >= CONFIG.seasonMatches) {
-    notify("Your season is already complete.");
+  if (
+    game.rosterSeason.match >= 19
+  ) {
+
+    notify(
+      "Your season is already complete."
+    );
+
     return;
   }
 
-  const opponents = (CONFIG.premierLeagueTeams || [])
-    .filter(team => team !== game.rosterTeam);
+  let teams =
+    game.rosterLeague === "LaLiga"
+      ? CONFIG.laLigaTeams || []
+      : CONFIG.premierLeagueTeams || [];
 
-  const opponent = randomItem(opponents);
+  let opponents =
+    teams.filter(
+      team =>
+        team !== game.rosterTeam
+    );
 
-  const teamRating = Math.round(
-    averageRating(game.roster)
-  );
+  if (!opponents.length) {
 
-  const opponentRating = randomNumber(74, 88);
+    notify(
+      "No opponents found."
+    );
 
-  const result = simulateMatchScore(
-    teamRating,
-    opponentRating,
-    100,
-    50
-  );
+    return;
+  }
+
+  const opponent =
+    randomItem(opponents);
+
+  const teamRating =
+    Math.round(
+      averageRating(game.roster)
+    );
+
+  /*
+     Roster mode keeps the original style:
+
+     Win  = 100
+     Draw = 50
+     Loss = 0
+  */
+
+  const opponentRating =
+    randomNumber(72, 88);
+
+  const result =
+    createMatchResult(
+      teamRating,
+      opponentRating,
+      100,
+      50
+    );
 
   game.rosterSeason.match++;
 
   if (result.result === "win") {
     game.rosterSeason.wins++;
-  } else if (result.result === "draw") {
+  }
+
+  if (result.result === "draw") {
     game.rosterSeason.draws++;
-  } else {
+  }
+
+  if (result.result === "loss") {
     game.rosterSeason.losses++;
   }
 
-  game.rosterSeason.points += result.points;
+  game.rosterSeason.points +=
+    result.points;
 
   game.rosterSeason.results.push({
-    match: game.rosterSeason.match,
-    opponent,
-    score: `${result.teamGoals}-${result.opponentGoals}`,
-    result: result.result,
-    points: result.points
+
+    match:
+      game.rosterSeason.match,
+
+    opponent:
+      opponent,
+
+    score:
+      `${result.teamGoals}-${result.opponentGoals}`,
+
+    result:
+      result.result,
+
+    points:
+      result.points
+
   });
 
-  updateRosterStandings(
-    game.rosterTeam,
-    game.rosterSeason.points,
-    game.rosterSeason.wins,
-    game.rosterSeason.draws,
-    game.rosterSeason.losses
+  updateRosterStanding();
+
+  showRosterMatchResult(
+    opponent,
+    result
   );
 
-  showRosterMatchResult(opponent, result);
   renderRosterSeason();
+
   renderRosterStandings();
 
   saveGame(game);
 }
 
-function simulateMatchScore(
+/* =========================================================
+   MATCH ENGINE
+   ========================================================= */
+
+function createMatchResult(
   teamRating,
   opponentRating,
   winPoints,
   drawPoints
 ) {
-  const difference = teamRating - opponentRating;
 
-  let chance = 0.5 + difference * 0.025;
+  const difference =
+    teamRating -
+    opponentRating;
 
-  chance = Math.max(0.15, Math.min(0.85, chance));
+  let winChance =
+    0.50 +
+    difference * 0.025;
 
-  const roll = Math.random();
+  winChance =
+    Math.max(
+      0.15,
+      Math.min(
+        0.85,
+        winChance
+      )
+    );
+
+  const roll =
+    Math.random();
 
   let result;
 
-  if (roll < chance - 0.12) {
+  if (
+    roll <
+    winChance - 0.12
+  ) {
+
     result = "win";
-  } else if (roll < chance + 0.12) {
+
+  } else if (
+    roll <
+    winChance + 0.12
+  ) {
+
     result = "draw";
+
   } else {
+
     result = "loss";
   }
 
@@ -434,236 +813,426 @@ function simulateMatchScore(
   let opponentGoals;
 
   if (result === "draw") {
-    teamGoals = randomNumber(0, 3);
-    opponentGoals = teamGoals;
+
+    teamGoals =
+      randomNumber(0, 3);
+
+    opponentGoals =
+      teamGoals;
+
   } else if (result === "win") {
-    teamGoals = randomNumber(2, 5);
-    opponentGoals = randomNumber(0, Math.max(0, teamGoals - 1));
+
+    teamGoals =
+      randomNumber(2, 5);
+
+    opponentGoals =
+      randomNumber(
+        0,
+        Math.max(
+          0,
+          teamGoals - 1
+        )
+      );
+
   } else {
-    opponentGoals = randomNumber(2, 5);
-    teamGoals = randomNumber(0, Math.max(0, opponentGoals - 1));
+
+    opponentGoals =
+      randomNumber(2, 5);
+
+    teamGoals =
+      randomNumber(
+        0,
+        Math.max(
+          0,
+          opponentGoals - 1
+        )
+      );
+  }
+
+  let points = 0;
+
+  if (result === "win") {
+    points = winPoints;
+  }
+
+  if (result === "draw") {
+    points = drawPoints;
   }
 
   return {
+
     result,
-    points:
-      result === "win"
-        ? winPoints
-        : result === "draw"
-          ? drawPoints
-          : 0,
+
+    points,
+
     teamGoals,
-    opponentGoals
+
+    opponentGoals,
+
+    teamRating,
+
+    opponentRating
+
   };
 }
 
-function showRosterMatchResult(opponent, result) {
-  const title = document.getElementById("rosterMatchTitle");
-  const display = document.getElementById("rosterMatch");
+/* =========================================================
+   ROSTER MATCH RESULT
+   ========================================================= */
 
-  if (!title || !display) return;
+function showRosterMatchResult(
+  opponent,
+  result
+) {
 
-  const resultWord =
-    result.result === "win"
-      ? "beat"
-      : result.result === "draw"
-        ? "drew with"
-        : "lost to";
+  const title =
+    document.getElementById(
+      "rosterMatchTitle"
+    );
 
-  title.textContent = `Match ${game.rosterSeason.match}`;
+  const display =
+    document.getElementById(
+      "rosterMatch"
+    );
+
+  if (title) {
+
+    title.textContent =
+      `Match ${game.rosterSeason.match}`;
+  }
+
+  if (!display) return;
+
+  let description;
+
+  if (result.result === "win") {
+
+    description =
+      `${game.rosterTeam} beat ${opponent}`;
+
+  } else if (
+    result.result === "draw"
+  ) {
+
+    description =
+      `${game.rosterTeam} drew with ${opponent}`;
+
+  } else {
+
+    description =
+      `${game.rosterTeam} lost to ${opponent}`;
+  }
 
   display.innerHTML = `
+
     <div class="game-card">
-      <h3>
+
+      <h2>
         ${escapeHTML(game.rosterTeam)}
         ${result.teamGoals}
         -
         ${result.opponentGoals}
         ${escapeHTML(opponent)}
-      </h3>
+      </h2>
 
       <p>
-        ${escapeHTML(game.rosterTeam)}
-        ${resultWord}
-        ${escapeHTML(opponent)}
+        ${escapeHTML(description)}
       </p>
 
-      <strong>
-        +${result.points} points
-      </strong>
+      <h3>
+        ${result.points} points
+      </h3>
+
     </div>
+
   `;
 }
 
 /* =========================================================
-   ROSTER SEASON
+   UPDATE STANDING
+   ========================================================= */
+
+function updateRosterStanding() {
+
+  const standing =
+    game.rosterStandings.find(
+      s =>
+        s.team ===
+        game.rosterTeam
+    );
+
+  if (!standing) return;
+
+  const season =
+    game.rosterSeason;
+
+  standing.played =
+    season.match;
+
+  standing.wins =
+    season.wins;
+
+  standing.draws =
+    season.draws;
+
+  standing.losses =
+    season.losses;
+
+  standing.points =
+    season.points;
+
+  game.rosterStandings.sort(
+    (a, b) =>
+      b.points - a.points
+  );
+}
+
+/* =========================================================
+   ROSTER SEASON DISPLAY
    ========================================================= */
 
 function renderRosterSeason() {
-  const container = document.getElementById("rosterSeason");
+
+  const container =
+    document.getElementById(
+      "rosterSeason"
+    );
 
   if (!container) return;
 
   if (!game.rosterSeason) {
+
     container.innerHTML = `
       <div class="info-box">
-        Select 6 players and start your season.
+        Choose 6 players and start your season.
       </div>
     `;
+
     return;
   }
 
-  const season = game.rosterSeason;
+  const season =
+    game.rosterSeason;
 
   container.innerHTML = `
+
     <div class="stats-grid">
+
       <div>
         <strong>Match</strong>
-        <span>${season.match}/${CONFIG.seasonMatches}</span>
+        <span>
+          ${season.match}/19
+        </span>
       </div>
 
       <div>
         <strong>Points</strong>
-        <span>${season.points}</span>
+        <span>
+          ${season.points}
+        </span>
       </div>
 
       <div>
         <strong>Wins</strong>
-        <span>${season.wins}</span>
+        <span>
+          ${season.wins}
+        </span>
       </div>
 
       <div>
         <strong>Draws</strong>
-        <span>${season.draws}</span>
+        <span>
+          ${season.draws}
+        </span>
       </div>
 
       <div>
         <strong>Losses</strong>
-        <span>${season.losses}</span>
+        <span>
+          ${season.losses}
+        </span>
       </div>
+
     </div>
+
   `;
 
-  if (season.match >= CONFIG.seasonMatches) {
-    const results = document.getElementById("rosterResults");
+  const results =
+    document.getElementById(
+      "rosterResults"
+    );
 
-    if (results) {
-      results.innerHTML = `
-        <div class="info-box">
-          <h3>Season Complete!</h3>
-          <p>
-            ${season.wins} wins,
-            ${season.draws} draws,
-            ${season.losses} losses
-          </p>
-          <strong>
-            ${season.points} points
-          </strong>
-        </div>
-      `;
-    }
+  if (
+    season.match >= 19 &&
+    results
+  ) {
+
+    results.innerHTML = `
+
+      <div class="info-box">
+
+        <h2>
+          Season Complete!
+        </h2>
+
+        <p>
+          ${season.wins} wins
+        </p>
+
+        <p>
+          ${season.draws} draws
+        </p>
+
+        <p>
+          ${season.losses} losses
+        </p>
+
+        <h3>
+          ${season.points} points
+        </h3>
+
+      </div>
+
+    `;
   }
 }
 
-function createRosterStandings() {
-  const teams = CONFIG.premierLeagueTeams || [];
-
-  return teams.map(team => ({
-    team,
-    played: 0,
-    wins: 0,
-    draws: 0,
-    losses: 0,
-    points: 0
-  }));
-}
-
-function findStanding(team) {
-  return game.rosterStandings.find(
-    standing => standing.team === team
-  );
-}
-
-function updateRosterStandings(
-  team,
-  points,
-  wins,
-  draws,
-  losses
-) {
-  if (!game.rosterStandings.length) {
-    game.rosterStandings = createRosterStandings();
-  }
-
-  const standing = findStanding(team);
-
-  if (!standing) return;
-
-  standing.played = wins + draws + losses;
-  standing.wins = wins;
-  standing.draws = draws;
-  standing.losses = losses;
-  standing.points = points;
-
-  game.rosterStandings.sort(
-    (a, b) => b.points - a.points
-  );
-}
+/* =========================================================
+   STANDINGS DISPLAY
+   ========================================================= */
 
 function renderRosterStandings() {
-  const body = document.getElementById("standingsBody");
+
+  const body =
+    document.getElementById(
+      "standingsBody"
+    );
 
   if (!body) return;
 
-  if (!game.rosterStandings.length) {
-    game.rosterStandings = createRosterStandings();
+  if (
+    !game.rosterStandings ||
+    !game.rosterStandings.length
+  ) {
+
+    game.rosterStandings =
+      createLeagueStandings();
   }
 
-  const standings = [...game.rosterStandings]
-    .sort((a, b) => b.points - a.points);
+  const standings =
+    [...game.rosterStandings].sort(
+      (a, b) =>
+        b.points - a.points
+    );
 
-  body.innerHTML = standings.map((standing, index) => `
-    <tr>
-      <td>${index + 1}</td>
-      <td>${escapeHTML(standing.team)}</td>
-      <td>${standing.played}</td>
-      <td>${standing.wins}</td>
-      <td>${standing.draws}</td>
-      <td>${standing.losses}</td>
-      <td><strong>${standing.points}</strong></td>
-    </tr>
-  `).join("");
+  body.innerHTML =
+    standings.map(
+      (team, index) => `
+
+        <tr>
+
+          <td>
+            ${index + 1}
+          </td>
+
+          <td>
+            ${escapeHTML(team.team)}
+          </td>
+
+          <td>
+            ${team.played}
+          </td>
+
+          <td>
+            ${team.wins}
+          </td>
+
+          <td>
+            ${team.draws}
+          </td>
+
+          <td>
+            ${team.losses}
+          </td>
+
+          <td>
+            <strong>
+              ${team.points}
+            </strong>
+          </td>
+
+        </tr>
+
+      `
+    ).join("");
 }
 
 /* =========================================================
    SUPER SQUAD
    ========================================================= */
 
+function openSuperSquadMode() {
+
+  game.mode =
+    "superSquad";
+
+  showScreen(
+    "superSquadMode"
+  );
+
+  renderSuperSquad();
+
+  saveGame(game);
+}
+
 function createSuperTeam() {
-  const input = document.getElementById("teamName");
+
+  const input =
+    document.getElementById(
+      "teamName"
+    );
 
   if (!input) return;
 
-  const rawName = input.value.trim();
+  const name =
+    input.value.trim();
 
-  if (!rawName) {
-    notify("Enter a team name.");
+  if (!name) {
+
+    notify(
+      "Enter a team name."
+    );
+
     return;
   }
 
-  game.squadName = cleanTeamName(rawName);
+  const cleaned =
+    cleanTeamName(name);
 
-  if (!game.squadName) {
-    notify("Please choose a different team name.");
+  if (!cleaned) {
+
+    notify(
+      "Please choose another team name."
+    );
+
     return;
   }
 
-  game.points = CONFIG.startingPoints || 100;
+  game.squadName =
+    cleaned;
+
+  game.points = 100;
+
   game.wins = 0;
   game.draws = 0;
   game.losses = 0;
+
   game.collection = [];
   game.lineup = [];
+
+  game.superDifficulty =
+    "easy";
+
   game.squadSeason = {
     match: 0,
     wins: 0,
@@ -673,146 +1242,251 @@ function createSuperTeam() {
     results: []
   };
 
-  game.superDifficulty =
-    CONFIG.defaultSuperSquadMode || "easy";
-
   renderSuperSquad();
+
   saveGame(game);
 
-  notify(`Welcome to Super Squad, ${game.squadName}!`);
+  notify(
+    `Welcome to ${game.squadName}!`
+  );
 }
 
+/* =========================================================
+   SUPER SQUAD RENDER
+   ========================================================= */
+
 function renderSuperSquad() {
-  const createBox = document.getElementById("createTeamBox");
-  const superGame = document.getElementById("superGame");
+
+  const createBox =
+    document.getElementById(
+      "createTeamBox"
+    );
+
+  const superGame =
+    document.getElementById(
+      "superGame"
+    );
 
   if (!game.squadName) {
-    if (createBox) createBox.style.display = "block";
-    if (superGame) superGame.style.display = "none";
+
+    if (createBox) {
+      createBox.style.display =
+        "block";
+    }
+
+    if (superGame) {
+      superGame.style.display =
+        "none";
+    }
+
     return;
   }
 
-  if (createBox) createBox.style.display = "none";
-  if (superGame) superGame.style.display = "block";
+  if (createBox) {
+    createBox.style.display =
+      "none";
+  }
 
-  const name = document.getElementById("superTeamName");
+  if (superGame) {
+    superGame.style.display =
+      "block";
+  }
+
+  const name =
+    document.getElementById(
+      "superTeamName"
+    );
 
   if (name) {
-    name.textContent = game.squadName;
+    name.textContent =
+      game.squadName;
   }
 
   renderSuperStats();
+  renderDifficulty();
   renderPacks();
   renderCollection();
   renderLineup();
   renderSuperSeason();
-  renderDifficultyButton();
-}
-
-function renderSuperStats() {
-  const points = document.getElementById("superPoints");
-  const wins = document.getElementById("superWins");
-  const draws = document.getElementById("superDraws");
-  const losses = document.getElementById("superLosses");
-
-  if (points) points.textContent = formatNumber(game.points);
-  if (wins) wins.textContent = game.wins;
-  if (draws) draws.textContent = game.draws;
-  if (losses) losses.textContent = game.losses;
 }
 
 /* =========================================================
-   DIFFICULTY
+   SUPER STATS
    ========================================================= */
 
-function getDifficultySettings() {
-  const modes = CONFIG.superSquadModes || {
-    easy: {
-      name: "Easy Mode",
-      opponentMin: 72,
-      opponentMax: 84,
-      winPoints: 100,
-      drawPoints: 50,
-      lossPoints: 0
-    },
-    hard: {
-      name: "Hard Mode",
-      opponentMin: 82,
-      opponentMax: 95,
-      winPoints: 200,
-      drawPoints: 100,
-      lossPoints: 0
-    }
-  };
+function renderSuperStats() {
 
-  return modes[game.superDifficulty] || modes.easy;
+  const points =
+    document.getElementById(
+      "superPoints"
+    );
+
+  const wins =
+    document.getElementById(
+      "superWins"
+    );
+
+  const draws =
+    document.getElementById(
+      "superDraws"
+    );
+
+  const losses =
+    document.getElementById(
+      "superLosses"
+    );
+
+  if (points) {
+    points.textContent =
+      formatNumber(game.points);
+  }
+
+  if (wins) {
+    wins.textContent =
+      game.wins;
+  }
+
+  if (draws) {
+    draws.textContent =
+      game.draws;
+  }
+
+  if (losses) {
+    losses.textContent =
+      game.losses;
+  }
 }
 
-function renderDifficultyButton() {
-  const superGame = document.getElementById("superGame");
+/* =========================================================
+   EASY / HARD
+   ========================================================= */
+
+function getDifficulty() {
+
+  if (
+    game.superDifficulty ===
+    "hard"
+  ) {
+
+    return {
+      name: "Hard Mode",
+      min: 82,
+      max: 95,
+      win: 200,
+      draw: 100
+    };
+  }
+
+  return {
+    name: "Easy Mode",
+    min: 72,
+    max: 84,
+    win: 100,
+    draw: 50
+  };
+}
+
+function renderDifficulty() {
+
+  const superGame =
+    document.getElementById(
+      "superGame"
+    );
 
   if (!superGame) return;
 
-  let box = document.getElementById("difficultyBox");
+  let box =
+    document.getElementById(
+      "difficultyBox"
+    );
 
   if (!box) {
-    box = document.createElement("div");
-    box.id = "difficultyBox";
-    box.className = "info-box";
 
-    superGame.insertBefore(
-      box,
-      superGame.firstChild
-    );
+    box =
+      document.createElement(
+        "div"
+      );
+
+    box.id =
+      "difficultyBox";
+
+    box.className =
+      "info-box";
+
+    superGame.prepend(box);
   }
 
-  const settings = getDifficultySettings();
+  const difficulty =
+    getDifficulty();
 
   box.innerHTML = `
-    <h3>Difficulty: ${escapeHTML(settings.name)}</h3>
+
+    <h3>
+      ${difficulty.name}
+    </h3>
 
     <p>
-      Opponents:
-      ${settings.opponentMin}-${settings.opponentMax}
+      Opponent rating:
+      ${difficulty.min}-${difficulty.max}
     </p>
 
     <p>
-      Win: ${settings.winPoints} |
-      Draw: ${settings.drawPoints} |
-      Loss: ${settings.lossPoints}
+      Win: ${difficulty.win}
+      |
+      Draw: ${difficulty.draw}
+      |
+      Loss: 0
     </p>
 
     <button
+      type="button"
       class="main-button"
       id="difficultyToggle"
     >
-      Switch to ${
+      Switch to
+      ${
         game.superDifficulty === "easy"
           ? "Hard"
           : "Easy"
       }
     </button>
+
   `;
 
-  const button = document.getElementById(
-    "difficultyToggle"
-  );
-
-  if (button) {
-    button.onclick = toggleDifficulty;
-  }
+  document
+    .getElementById(
+      "difficultyToggle"
+    )
+    .onclick =
+    toggleDifficulty;
 }
 
 function toggleDifficulty() {
-  if (game.superDifficulty === "easy") {
-    game.superDifficulty = "hard";
-    notify("Hard Mode enabled. Opponents are stronger and rewards are higher.");
+
+  if (
+    game.superDifficulty ===
+    "easy"
+  ) {
+
+    game.superDifficulty =
+      "hard";
+
+    notify(
+      "Hard Mode enabled!"
+    );
+
   } else {
-    game.superDifficulty = "easy";
-    notify("Easy Mode enabled. Rewards are now 100/50/0.");
+
+    game.superDifficulty =
+      "easy";
+
+    notify(
+      "Easy Mode enabled. Rewards are 100/50/0."
+    );
   }
 
   renderSuperSquad();
+
   saveGame(game);
 }
 
@@ -821,8 +1495,16 @@ function toggleDifficulty() {
    ========================================================= */
 
 function renderPacks() {
-  const bronze = document.getElementById("bronzePack");
-  const gold = document.getElementById("goldPack");
+
+  const bronze =
+    document.getElementById(
+      "bronzePack"
+    );
+
+  const gold =
+    document.getElementById(
+      "goldPack"
+    );
 
   if (bronze) {
     bronze.disabled =
@@ -834,144 +1516,312 @@ function renderPacks() {
       game.points < 100;
   }
 
-  let iconButton =
-    document.getElementById("iconPack");
-
-  const packContainer =
-    bronze?.parentElement?.parentElement ||
-    gold?.parentElement?.parentElement;
-
-  if (!iconButton && packContainer) {
-    iconButton = document.createElement("button");
-    iconButton.id = "iconPack";
-    iconButton.className = "pack icon";
-    iconButton.innerHTML = `
-      <strong>Icon Pack</strong>
-      <span>1,000 points</span>
-      <small>1 guaranteed Icon</small>
-    `;
-
-    iconButton.onclick = () => openPack("icon");
-
-    packContainer.appendChild(iconButton);
-  }
-
-  if (iconButton) {
-    iconButton.disabled =
-      game.points < 1000;
-  }
+  createIconPackButton();
 }
 
-function getPackPlayerCustom(packType) {
-  const normalPlayers = (CONFIG.players || [])
-    .filter(p => p.rarity !== "Icon");
+function createIconPackButton() {
 
-  const icons = (CONFIG.players || [])
-    .filter(p => p.rarity === "Icon");
-
-  if (packType === "icon") {
-    return randomItem(icons);
+  if (
+    document.getElementById(
+      "iconPack"
+    )
+  ) {
+    return;
   }
 
-  let roll = Math.random();
+  const bronze =
+    document.getElementById(
+      "bronzePack"
+    );
+
+  const gold =
+    document.getElementById(
+      "goldPack"
+    );
+
+  if (!bronze && !gold) {
+    return;
+  }
+
+  const parent =
+    bronze?.parentElement ||
+    gold?.parentElement;
+
+  if (!parent) return;
+
+  const button =
+    document.createElement(
+      "button"
+    );
+
+  button.id =
+    "iconPack";
+
+  button.type =
+    "button";
+
+  button.className =
+    "pack";
+
+  button.innerHTML = `
+
+    <strong>
+      Icon Pack
+    </strong>
+
+    <span>
+      1,000 points
+    </span>
+
+    <small>
+      1 guaranteed Icon
+    </small>
+
+  `;
+
+  button.onclick =
+    function () {
+      openPack("icon");
+    };
+
+  parent.appendChild(
+    button
+  );
+}
+
+/* =========================================================
+   PACK PLAYER
+   ========================================================= */
+
+function getCustomPackPlayer(
+  packType
+) {
+
+  const players =
+    CONFIG.players || [];
+
+  const icons =
+    players.filter(
+      player =>
+        player.rarity === "Icon"
+    );
+
+  if (
+    packType === "icon"
+  ) {
+
+    return randomItem(
+      icons
+    );
+  }
+
+  let roll =
+    Math.random();
 
   let iconChance;
   let rareChance;
 
-  if (packType === "bronze") {
-    iconChance = 0.04;
-    rareChance = 0.20;
+  if (
+    packType === "bronze"
+  ) {
+
+    iconChance =
+      0.04;
+
+    rareChance =
+      0.20;
+
   } else {
-    iconChance = 0.10;
-    rareChance = 0.30;
+
+    iconChance =
+      0.10;
+
+    rareChance =
+      0.30;
   }
 
-  if (roll < iconChance && icons.length) {
-    return randomItem(icons);
+  if (
+    roll < iconChance &&
+    icons.length
+  ) {
+
+    return randomItem(
+      icons
+    );
   }
 
-  roll = Math.random();
-
-  if (roll < rareChance) {
-    const rarePlayers = normalPlayers.filter(
-      p =>
-        p.rarity === "Rare" ||
-        p.rarity === "rare"
+  const normal =
+    players.filter(
+      player =>
+        player.rarity !== "Icon"
     );
 
-    if (rarePlayers.length) {
-      return randomItem(rarePlayers);
+  roll =
+    Math.random();
+
+  if (
+    roll < rareChance
+  ) {
+
+    const rare =
+      normal.filter(
+        player =>
+          player.rarity ===
+            "Rare" ||
+          player.rarity ===
+            "rare"
+      );
+
+    if (rare.length) {
+      return randomItem(
+        rare
+      );
     }
   }
 
-  return randomItem(normalPlayers);
+  return randomItem(
+    normal
+  );
 }
 
-function openPack(packType) {
+/* =========================================================
+   OPEN PACK
+   ========================================================= */
+
+function openPack(
+  packType
+) {
+
   const costs = {
     bronze: 50,
     gold: 100,
     icon: 1000
   };
 
-  const cards = {
+  const amounts = {
     bronze: 5,
     gold: 5,
     icon: 1
   };
 
-  const cost = costs[packType];
+  const cost =
+    costs[packType];
 
-  if (game.points < cost) {
-    notify(`You need ${cost} points.`);
+  if (
+    game.points < cost
+  ) {
+
+    notify(
+      `You need ${cost} points.`
+    );
+
     return;
   }
 
-  game.points -= cost;
+  game.points -=
+    cost;
 
   const pulled = [];
 
-  for (let i = 0; i < cards[packType]; i++) {
-    const player = getPackPlayerCustom(packType);
+  for (
+    let i = 0;
+    i < amounts[packType];
+    i++
+  ) {
+
+    const player =
+      getCustomPackPlayer(
+        packType
+      );
 
     if (!player) continue;
-
-    const rarity =
-      player.rarity || "Common";
 
     const card = {
       ...player,
       id: createID(),
-      rarity
+      rarity:
+        player.rarity ||
+        "Common"
     };
 
-    game.collection.push(card);
-    pulled.push(card);
+    game.collection.push(
+      card
+    );
+
+    pulled.push(
+      card
+    );
   }
 
-  showPackResults(pulled);
+  showPackResults(
+    pulled
+  );
 
   renderSuperSquad();
+
   saveGame(game);
 }
 
-function showPackResults(players) {
+/* =========================================================
+   PACK RESULTS
+   ========================================================= */
+
+function showPackResults(
+  players
+) {
+
   const container =
-    document.getElementById("packResults");
+    document.getElementById(
+      "packResults"
+    );
 
   if (!container) return;
 
   container.innerHTML = `
+
     <div class="collection-grid">
-      ${players.map(player => `
-        <div class="card ${rarityClass(player.rarity)}">
-          <strong>${escapeHTML(player.name)}</strong>
-          <span>${escapeHTML(player.position || "Player")}</span>
-          <span>Rating: ${player.rating}</span>
-          <small>${escapeHTML(player.rarity || "Common")}</small>
-        </div>
-      `).join("")}
+
+      ${players.map(
+        player => `
+
+          <div
+            class="card ${rarityClass(
+              player.rarity
+            )}"
+          >
+
+            <strong>
+              ${escapeHTML(
+                player.name
+              )}
+            </strong>
+
+            <span>
+              ${escapeHTML(
+                player.position ||
+                "Player"
+              )}
+            </span>
+
+            <span>
+              Rating:
+              ${player.rating}
+            </span>
+
+            <small>
+              ${escapeHTML(
+                player.rarity ||
+                "Common"
+              )}
+            </small>
+
+          </div>
+
+        `
+      ).join("")}
+
     </div>
+
   `;
 }
 
@@ -980,110 +1830,224 @@ function showPackResults(players) {
    ========================================================= */
 
 function renderCollection() {
+
   const container =
-    document.getElementById("collection");
+    document.getElementById(
+      "collection"
+    );
 
   if (!container) return;
 
-  if (!game.collection.length) {
+  if (
+    !game.collection.length
+  ) {
+
     container.innerHTML =
       "<p>Your collection is empty. Open a pack!</p>";
+
     return;
   }
 
   container.innerHTML =
-    game.collection.map((player, index) => {
-      const selected = game.lineup.some(
-        p => p.id === player.id
-      );
+    game.collection.map(
+      (player, index) => {
 
-      return `
-        <div class="card ${rarityClass(player.rarity)}">
-          <strong>${escapeHTML(player.name)}</strong>
-          <span>${escapeHTML(player.position || "Player")}</span>
-          <span>Rating: ${player.rating}</span>
-          <small>${escapeHTML(player.rarity || "Common")}</small>
+        const selected =
+          game.lineup.some(
+            p =>
+              p.id ===
+              player.id
+          );
 
-          <button
-            class="main-button"
-            onclick="addToLineup(${index})"
-            ${selected || game.lineup.length >= 11 ? "disabled" : ""}
+        return `
+
+          <div
+            class="card ${rarityClass(
+              player.rarity
+            )}"
           >
-            ${selected ? "In Lineup" : "Add to Lineup"}
-          </button>
-        </div>
-      `;
-    }).join("");
+
+            <strong>
+              ${escapeHTML(
+                player.name
+              )}
+            </strong>
+
+            <span>
+              ${escapeHTML(
+                player.position ||
+                "Player"
+              )}
+            </span>
+
+            <span>
+              Rating:
+              ${player.rating}
+            </span>
+
+            <small>
+              ${escapeHTML(
+                player.rarity ||
+                "Common"
+              )}
+            </small>
+
+            <button
+              type="button"
+              class="main-button"
+              onclick="addToLineup(${index})"
+              ${
+                selected ||
+                game.lineup.length >= 11
+                  ? "disabled"
+                  : ""
+              }
+            >
+              ${
+                selected
+                  ? "In Lineup"
+                  : "Add to Lineup"
+              }
+            </button>
+
+          </div>
+
+        `;
+      }
+    ).join("");
 }
 
-function addToLineup(index) {
-  if (game.lineup.length >= 11) {
-    notify("Your lineup already has 11 players.");
+function addToLineup(
+  index
+) {
+
+  if (
+    game.lineup.length >= 11
+  ) {
+
+    notify(
+      "Your lineup already has 11 players."
+    );
+
     return;
   }
 
-  const player = game.collection[index];
+  const player =
+    game.collection[index];
 
   if (!player) return;
 
   if (
-    game.lineup.some(p => p.id === player.id)
+    game.lineup.some(
+      p =>
+        p.id === player.id
+    )
   ) {
     return;
   }
 
-  game.lineup.push(player);
+  game.lineup.push(
+    player
+  );
 
   renderSuperSquad();
+
   saveGame(game);
 }
 
-window.addToLineup = addToLineup;
+window.addToLineup =
+  addToLineup;
 
-function removeFromLineup(index) {
-  game.lineup.splice(index, 1);
+/* =========================================================
+   REMOVE LINEUP
+   ========================================================= */
+
+function removeFromLineup(
+  index
+) {
+
+  game.lineup.splice(
+    index,
+    1
+  );
 
   renderSuperSquad();
+
   saveGame(game);
 }
 
-window.removeFromLineup = removeFromLineup;
+window.removeFromLineup =
+  removeFromLineup;
+
+/* =========================================================
+   LINEUP
+   ========================================================= */
 
 function renderLineup() {
+
   const container =
-    document.getElementById("superLineup");
+    document.getElementById(
+      "superLineup"
+    );
 
   const count =
-    document.getElementById("lineupCount");
+    document.getElementById(
+      "lineupCount"
+    );
 
   if (count) {
+
     count.textContent =
       `${game.lineup.length}/11`;
   }
 
   if (!container) return;
 
-  if (!game.lineup.length) {
+  if (
+    !game.lineup.length
+  ) {
+
     container.innerHTML =
       "<p>Add players from your collection.</p>";
+
     return;
   }
 
   container.innerHTML =
-    game.lineup.map((player, index) => `
-      <div class="lineup-slot">
-        <strong>${escapeHTML(player.name)}</strong>
-        <span>${escapeHTML(player.position || "Player")}</span>
-        <span>${player.rating}</span>
+    game.lineup.map(
+      (player, index) => `
 
-        <button
-          class="main-button"
-          onclick="removeFromLineup(${index})"
-        >
-          Remove
-        </button>
-      </div>
-    `).join("");
+        <div class="lineup-slot">
+
+          <strong>
+            ${escapeHTML(
+              player.name
+            )}
+          </strong>
+
+          <span>
+            ${escapeHTML(
+              player.position ||
+              "Player"
+            )}
+          </span>
+
+          <span>
+            ${player.rating}
+          </span>
+
+          <button
+            type="button"
+            class="main-button"
+            onclick="removeFromLineup(${index})"
+          >
+            Remove
+          </button>
+
+        </div>
+
+      `
+    ).join("");
 }
 
 /* =========================================================
@@ -1091,52 +2055,82 @@ function renderLineup() {
    ========================================================= */
 
 function playSuperMatch() {
+
   if (!game.squadName) {
-    notify("Create your Super Squad first.");
+
+    notify(
+      "Create your Super Squad first."
+    );
+
     return;
   }
 
-  if (game.lineup.length !== 11) {
-    notify("You need exactly 11 players in your lineup.");
+  if (
+    game.lineup.length !== 11
+  ) {
+
+    notify(
+      "You need exactly 11 players."
+    );
+
     return;
   }
 
-  const settings = getDifficultySettings();
+  const difficulty =
+    getDifficulty();
 
   const opponents = [
     ...(CONFIG.premierLeagueTeams || []),
     ...(CONFIG.laLigaTeams || [])
   ];
 
-  const opponent = randomItem(opponents);
+  const opponent =
+    randomItem(
+      opponents
+    );
 
   const teamRating =
-    calculateSquadRating(game.lineup);
+    calculateSquadRating(
+      game.lineup
+    );
 
   const opponentRating =
     randomNumber(
-      settings.opponentMin,
-      settings.opponentMax
+      difficulty.min,
+      difficulty.max
     );
 
-  const result = simulateMatchScore(
-    teamRating,
-    opponentRating,
-    settings.winPoints,
-    settings.drawPoints
-  );
+  const result =
+    createMatchResult(
+      teamRating,
+      opponentRating,
+      difficulty.win,
+      difficulty.draw
+    );
 
-  game.points += result.points;
+  game.points +=
+    result.points;
 
-  if (result.result === "win") {
+  if (
+    result.result === "win"
+  ) {
     game.wins++;
-  } else if (result.result === "draw") {
+  }
+
+  if (
+    result.result === "draw"
+  ) {
     game.draws++;
-  } else {
+  }
+
+  if (
+    result.result === "loss"
+  ) {
     game.losses++;
   }
 
   if (!game.squadSeason) {
+
     game.squadSeason = {
       match: 0,
       wins: 0,
@@ -1148,153 +2142,191 @@ function playSuperMatch() {
   }
 
   game.squadSeason.match++;
-  game.squadSeason.points += result.points;
 
-  if (result.result === "win") {
+  game.squadSeason.points +=
+    result.points;
+
+  if (
+    result.result === "win"
+  ) {
     game.squadSeason.wins++;
-  } else if (result.result === "draw") {
+  }
+
+  if (
+    result.result === "draw"
+  ) {
     game.squadSeason.draws++;
-  } else {
+  }
+
+  if (
+    result.result === "loss"
+  ) {
     game.squadSeason.losses++;
   }
 
   game.squadSeason.results.push({
-    match: game.squadSeason.match,
+
+    match:
+      game.squadSeason.match,
+
     opponent,
-    score: `${result.teamGoals}-${result.opponentGoals}`,
-    result: result.result,
-    points: result.points,
-    difficulty: game.superDifficulty
+
+    score:
+      `${result.teamGoals}-${result.opponentGoals}`,
+
+    result:
+      result.result,
+
+    points:
+      result.points
+
   });
 
   showSuperMatchResult(
     opponent,
-    result,
-    settings
+    result
   );
 
   renderSuperSquad();
+
   saveGame(game);
 }
 
+/* =========================================================
+   SUPER MATCH RESULT
+   ========================================================= */
+
 function showSuperMatchResult(
   opponent,
-  result,
-  settings
+  result
 ) {
+
   const container =
-    document.getElementById("superResults");
+    document.getElementById(
+      "superResults"
+    );
 
   if (!container) return;
 
-  let sentence;
+  let text;
 
-  if (result.result === "win") {
-    sentence =
+  if (
+    result.result === "win"
+  ) {
+
+    text =
       `${game.squadName} beat ${opponent}`;
-  } else if (result.result === "draw") {
-    sentence =
+
+  } else if (
+    result.result === "draw"
+  ) {
+
+    text =
       `${game.squadName} drew with ${opponent}`;
+
   } else {
-    sentence =
+
+    text =
       `${game.squadName} lost to ${opponent}`;
   }
 
   container.innerHTML = `
+
     <div class="info-box">
-      <h3>
-        ${escapeHTML(game.squadName)}
+
+      <h2>
+        ${escapeHTML(
+          game.squadName
+        )}
+
         ${result.teamGoals}
         -
         ${result.opponentGoals}
-        ${escapeHTML(opponent)}
-      </h3>
 
-      <p>${escapeHTML(sentence)}</p>
+        ${escapeHTML(
+          opponent
+        )}
+      </h2>
 
       <p>
-        Difficulty:
-        <strong>${escapeHTML(settings.name)}</strong>
+        ${escapeHTML(text)}
       </p>
 
       <h3>
         +${result.points} points
       </h3>
+
     </div>
+
   `;
 }
 
 /* =========================================================
-   SUPER SQUAD SEASON
+   SUPER SEASON
    ========================================================= */
 
 function renderSuperSeason() {
-  const info =
-    document.getElementById("superSeasonInfo");
 
-  const results =
-    document.getElementById("superResults");
+  const info =
+    document.getElementById(
+      "superSeasonInfo"
+    );
+
+  if (!info) return;
 
   if (!game.squadSeason) {
-    if (info) {
-      info.innerHTML =
-        "<p>Your season has not started yet.</p>";
-    }
+
+    info.innerHTML =
+      "<p>Your season has not started yet.</p>";
 
     return;
   }
 
-  const season = game.squadSeason;
+  const season =
+    game.squadSeason;
 
-  if (info) {
-    info.innerHTML = `
-      <div class="stats-grid">
-        <div>
-          <strong>Matches</strong>
-          <span>${season.match}/19</span>
-        </div>
+  info.innerHTML = `
 
-        <div>
-          <strong>Points</strong>
-          <span>${season.points}</span>
-        </div>
+    <div class="stats-grid">
 
-        <div>
-          <strong>Wins</strong>
-          <span>${season.wins}</span>
-        </div>
-
-        <div>
-          <strong>Draws</strong>
-          <span>${season.draws}</span>
-        </div>
-
-        <div>
-          <strong>Losses</strong>
-          <span>${season.losses}</span>
-        </div>
+      <div>
+        <strong>Matches</strong>
+        <span>
+          ${season.match}/19
+        </span>
       </div>
-    `;
-  }
 
-  if (
-    season.match >= 19 &&
-    results
-  ) {
-    results.innerHTML += `
-      <div class="info-box">
-        <h3>Super Squad Season Complete!</h3>
-        <p>
-          ${season.wins} wins,
-          ${season.draws} draws,
-          ${season.losses} losses
-        </p>
-        <strong>
-          ${season.points} season points
-        </strong>
+      <div>
+        <strong>Points</strong>
+        <span>
+          ${season.points}
+        </span>
       </div>
-    `;
-  }
+
+      <div>
+        <strong>Wins</strong>
+        <span>
+          ${season.wins}
+        </span>
+      </div>
+
+      <div>
+        <strong>Draws</strong>
+        <span>
+          ${season.draws}
+        </span>
+      </div>
+
+      <div>
+        <strong>Losses</strong>
+        <span>
+          ${season.losses}
+        </span>
+      </div>
+
+    </div>
+
+  `;
 }
 
 /* =========================================================
@@ -1302,34 +2334,38 @@ function renderSuperSeason() {
    ========================================================= */
 
 function resetGame() {
-  const confirmed = confirm(
-    "Are you sure you want to reset your entire game?"
-  );
 
-  if (!confirmed) return;
+  if (
+    !confirm(
+      "Are you sure you want to reset your entire game?"
+    )
+  ) {
+    return;
+  }
 
-  game = createDefaultGame();
+  game =
+    createDefaultGame();
 
   deleteSave();
 
   const teamName =
-    document.getElementById("teamName");
+    document.getElementById(
+      "teamName"
+    );
 
   if (teamName) {
     teamName.value = "";
   }
 
-  const rosterTeam =
-    document.getElementById("rosterTeam");
+  renderEverything();
 
-  if (rosterTeam) {
-    rosterTeam.value = "";
-  }
+  showScreen(
+    "mainMenu"
+  );
 
-  renderAll();
-  showScreen("mainMenu");
-
-  notify("Game reset.");
+  notify(
+    "Game reset."
+  );
 }
 
 /* =========================================================
@@ -1337,21 +2373,51 @@ function resetGame() {
    ========================================================= */
 
 function notify(message) {
+
   const notification =
-    document.getElementById("notification");
+    document.getElementById(
+      "notification"
+    );
 
   if (!notification) {
+
     alert(message);
+
     return;
   }
 
-  notification.textContent = message;
-  notification.style.display = "block";
+  notification.textContent =
+    message;
 
-  clearTimeout(window.superLeagueNotificationTimer);
+  notification.style.display =
+    "block";
 
-  window.superLeagueNotificationTimer =
-    setTimeout(() => {
-      notification.style.display = "none";
-    }, 3000);
+  clearTimeout(
+    window.slsNotificationTimer
+  );
+
+  window.slsNotificationTimer =
+    setTimeout(
+      function () {
+
+        notification.style.display =
+          "none";
+
+      },
+      3000
+    );
+}
+
+/* =========================================================
+   SAFE JAVASCRIPT STRING
+   ========================================================= */
+
+function escapeJS(text) {
+
+  return String(text)
+    .replace(/\\/g, "\\\\")
+    .replace(/'/g, "\\'")
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, "\\n")
+    .replace(/\r/g, "\\r");
 }
