@@ -1,1326 +1,861 @@
-// ==========================================
-// SUPER LEAGUE SOCCER - GAME.JS
-// ==========================================
+/* SUPER LEAGUE SOCCER — BULLETPROOF GAME.JS
+   Replace your old game.js with this file.
+*/
+(() => {
+  "use strict";
 
-// ---------- GLOBAL GAME DATA ----------
+  const SAVE_KEY = "superLeagueSoccerSave_v4";
+  const ROSTER_SIZE = 6;
+  const SUPER_SIZE = 11;
+  const SEASON_MATCHES = 19;
+  const DEFAULT_DIFFICULTY = "easy";
 
-let game = {
-    mode: null,
+  const PACKS = {
+    bronze: {
+      name: "Bronze Pack",
+      cost: 50,
+      cards: 5,
+      odds: { icon: 0.04, rare: 0.20, common: 0.76 }
+    },
+    gold: {
+      name: "Gold Pack",
+      cost: 100,
+      cards: 5,
+      odds: { icon: 0.10, rare: 0.30, common: 0.60 }
+    },
+    icon: {
+      name: "Icon Pack",
+      cost: 1000,
+      cards: 1,
+      odds: { icon: 1, rare: 0, common: 0 }
+    }
+  };
 
-    roster: {
+  const DIFFICULTY = {
+    easy: {
+      name: "Easy",
+      min: 72,
+      max: 84,
+      win: 100,
+      draw: 50,
+      loss: 0
+    },
+    hard: {
+      name: "Hard",
+      min: 82,
+      max: 95,
+      win: 200,
+      draw: 100,
+      loss: 0
+    }
+  };
+
+  let game = makeDefaultGame();
+  let initialized = false;
+
+  const $ = id => document.getElementById(id);
+
+  const safeText = value => String(value ?? "");
+
+  const clamp = (n, min, max) =>
+    Math.max(min, Math.min(max, Number(n) || 0));
+
+  const rand = (min, max) =>
+    Math.floor(Math.random() * (max - min + 1)) + min;
+
+  const pick = arr =>
+    arr && arr.length
+      ? arr[Math.floor(Math.random() * arr.length)]
+      : null;
+
+  const esc = value =>
+    safeText(value).replace(/[&<>"']/g, c => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      "\"": "&quot;",
+      "'": "&#039;"
+    }[c]));
+
+  function id() {
+    return "p_" +
+      Date.now().toString(36) +
+      Math.random().toString(36).slice(2, 9);
+  }
+
+  function clonePlayer(player) {
+    if (!player) return null;
+
+    return {
+      ...player,
+      id: player.id || id()
+    };
+  }
+
+  function cfg() {
+    return typeof CONFIG !== "undefined" && CONFIG
+      ? CONFIG
+      : {};
+  }
+
+  function allPlayers() {
+    const players =
+      Array.isArray(cfg().players)
+        ? cfg().players
+        : [];
+
+    return players
+      .map(clonePlayer)
+      .filter(Boolean);
+  }
+
+  function leagueTeams(league) {
+    const c = cfg();
+
+    const key =
+      league === "LaLiga"
+        ? "laLigaTeams"
+        : "premierLeagueTeams";
+
+    return Array.isArray(c[key])
+      ? c[key].slice()
+      : [];
+  }
+
+  function playersForTeam(team, league) {
+    let list = allPlayers().filter(
+      player =>
+        player.team === team &&
+        (!league || player.league === league)
+    );
+
+    while (list.length < 6) {
+      list.push({
+        name: `${team} Squad Player ${list.length + 1}`,
+        team,
+        league,
+        position: ["GK", "DEF", "MID", "FWD"][list.length % 4],
+        rating: rand(70, 84),
+        id: id()
+      });
+    }
+
+    return list;
+  }
+
+  function normalPlayers() {
+    return allPlayers().filter(player => !isIcon(player));
+  }
+
+  function isIcon(player) {
+    return !!player &&
+      (
+        player.rarity === "Icon" ||
+        /\bicon\b/i.test(player.name || "") ||
+        player.team === "Icons" ||
+        player.league === "Icons"
+      );
+  }
+
+  function isRare(player) {
+    return !!player &&
+      (
+        player.rarity === "Rare" ||
+        player.rating >= 88
+      ) &&
+      !isIcon(player);
+  }
+
+  function iconPlayers() {
+    const wanted = [
+      ["Pelé", 98],
+      ["Diego Maradona", 97],
+      ["Johan Cruyff", 96],
+      ["Franz Beckenbauer", 96],
+      ["Paolo Maldini", 95],
+      ["Zinedine Zidane", 95],
+      ["Ronaldo Nazario", 96],
+      ["Ronaldinho", 94],
+      ["Thierry Henry", 94],
+      ["Xavi", 94],
+      ["Andres Iniesta", 94],
+      ["David Beckham", 92],
+      ["Andrea Pirlo", 93],
+      ["Roberto Carlos", 94],
+      ["Cafu", 93],
+      ["Gianluigi Buffon", 95],
+      ["Iker Casillas", 94],
+      ["Lev Yashin", 97],
+      ["George Best", 95],
+      ["Eusebio", 95],
+      ["Marco van Basten", 94],
+      ["Ruud Gullit", 93],
+      ["Lothar Matthaus", 94],
+      ["Patrick Vieira", 92],
+      ["Luis Figo", 93],
+      ["Kaká", 93],
+      ["Alessandro Del Piero", 93],
+      ["Franco Baresi", 94],
+      ["Sergio Busquets", 91],
+      ["Samuel Eto'o", 93]
+    ];
+
+    const existing = allPlayers().filter(isIcon);
+
+    return wanted.map(([name, rating]) => {
+      const found = existing.find(player =>
+        player.name
+          .toLowerCase()
+          .includes(name.toLowerCase())
+      );
+
+      return found || {
+        name: `${name} Icon`,
+        team: "Icons",
+        league: "Icons",
+        position: "MID",
+        rating,
+        rarity: "Icon",
+        id: id()
+      };
+    });
+  }
+
+  function makeDefaultGame() {
+    return {
+      roster: {
         league: "Premier League",
         team: "",
         players: [],
-        season: {
-            currentMatch: 0,
-            points: 0,
-            wins: 0,
-            draws: 0,
-            losses: 0,
-            history: []
-        }
-    },
-
-    superSquad: {
-        teamName: "",
+        match: 0,
         points: 0,
         wins: 0,
         draws: 0,
         losses: 0,
-        lineup: [],
+        results: [],
+        standings: []
+      },
+
+      superSquad: {
+        teamName: "",
         collection: [],
-        difficulty: "Easy",
-        season: {
-            currentMatch: 0,
-            history: []
-        }
-    }
-};
+        lineup: [],
+        points: 0,
+        wins: 0,
+        draws: 0,
+        losses: 0,
+        season: 0,
+        difficulty: DEFAULT_DIFFICULTY,
+        matchHistory: []
+      },
 
+      activeMode: "mainMenu"
+    };
+  }
 
-// ---------- HELPERS ----------
+  function normalize(raw) {
+    const base = makeDefaultGame();
 
-function $(id) {
-    return document.getElementById(id);
-}
+    if (!raw || typeof raw !== "object")
+      return base;
 
-function showScreen(id) {
-    document.querySelectorAll(".screen").forEach(screen => {
-        screen.classList.add("hidden");
-        screen.classList.remove("active");
+    base.activeMode =
+      ["mainMenu", "rosterMode", "superSquadMode"]
+        .includes(raw.activeMode)
+        ? raw.activeMode
+        : "mainMenu";
+
+    base.roster = {
+      ...base.roster,
+      ...(raw.roster || {})
+    };
+
+    base.superSquad = {
+      ...base.superSquad,
+      ...(raw.superSquad || {})
+    };
+
+    base.roster.players =
+      Array.isArray(base.roster.players)
+        ? base.roster.players
+            .slice(0, ROSTER_SIZE)
+            .map(clonePlayer)
+            .filter(Boolean)
+        : [];
+
+    base.roster.results =
+      Array.isArray(base.roster.results)
+        ? base.roster.results.slice(0, SEASON_MATCHES)
+        : [];
+
+    base.roster.standings =
+      Array.isArray(base.roster.standings)
+        ? base.roster.standings
+        : [];
+
+    base.superSquad.collection =
+      Array.isArray(base.superSquad.collection)
+        ? base.superSquad.collection
+            .map(clonePlayer)
+            .filter(Boolean)
+        : [];
+
+    base.superSquad.lineup =
+      Array.isArray(base.superSquad.lineup)
+        ? base.superSquad.lineup
+            .map(clonePlayer)
+            .filter(Boolean)
+        : [];
+
+    base.superSquad.lineup =
+      uniqueById(base.superSquad.lineup)
+        .filter(player =>
+          base.superSquad.collection.some(
+            collected => collected.id === player.id
+          )
+        );
+
+    base.superSquad.difficulty =
+      DIFFICULTY[base.superSquad.difficulty]
+        ? base.superSquad.difficulty
+        : DEFAULT_DIFFICULTY;
+
+    return base;
+  }
+
+  function uniqueById(list) {
+    const seen = new Set();
+
+    return (list || []).filter(player => {
+      const key = player.id || player.name;
+
+      if (seen.has(key))
+        return false;
+
+      seen.add(key);
+      return true;
     });
+  }
 
-    const screen = $(id);
+  function save() {
+    try {
+      localStorage.setItem(
+        SAVE_KEY,
+        JSON.stringify(game)
+      );
+    } catch (_) {
+      notify(
+        "Save storage is unavailable in this browser."
+      );
+    }
+  }
+
+  function load() {
+    try {
+      const raw =
+        localStorage.getItem(SAVE_KEY);
+
+      if (raw)
+        game = normalize(JSON.parse(raw));
+
+    } catch (_) {
+      game = makeDefaultGame();
+    }
+  }
+
+  function resetSave() {
+    game = makeDefaultGame();
+
+    try {
+      localStorage.removeItem(SAVE_KEY);
+    } catch (_) {}
+
+    renderAll();
+    showScreen("mainMenu");
+    notify("Game reset.");
+  }
+
+  function notify(message) {
+    const el = $("notification");
+
+    if (!el)
+      return;
+
+    el.textContent = message;
+    el.style.display = "block";
+
+    clearTimeout(notify.timer);
+
+    notify.timer = setTimeout(() => {
+      el.style.display = "none";
+    }, 3200);
+  }
+
+  function showScreen(screenId) {
+    document
+      .querySelectorAll(".screen")
+      .forEach(el => {
+        el.classList.add("hidden");
+        el.classList.remove("active");
+        el.style.display = "none";
+      });
+
+    const screen = $(screenId);
 
     if (screen) {
-        screen.classList.remove("hidden");
-        screen.classList.add("active");
-    }
-}
-
-function notify(message) {
-    const box = $("notification");
-
-    if (!box) {
-        alert(message);
-        return;
+      screen.classList.remove("hidden");
+      screen.classList.add("active");
+      screen.style.display = "block";
     }
 
-    box.textContent = message;
-    box.classList.remove("hidden");
+    game.activeMode = screenId;
+    save();
+  }
 
-    setTimeout(() => {
-        box.classList.add("hidden");
-    }, 3000);
-}
+  window.openMode = mode => {
+    if (mode === "rosterMode")
+      openRoster();
+    else if (mode === "superSquadMode")
+      openSuper();
+    else
+      showScreen("mainMenu");
+  };
 
+  window.resetGame = resetSave;
 
-// ---------- NAVIGATION ----------
-
-function openMode(mode) {
-    game.mode = mode;
-
-    if (mode === "mainMenu") {
-        showScreen("mainMenu");
-        return;
-    }
-
-    if (mode === "rosterMode") {
-        showScreen("rosterMode");
-        setupRosterMode();
-        return;
-    }
-
-    if (mode === "superSquadMode") {
-        showScreen("superSquadMode");
-        setupSuperSquadMode();
-        return;
-    }
-}
-
-
-// ---------- ROSTER MODE ----------
-
-function setupRosterMode() {
-
+  function ensureRosterControls() {
     const teamSelect = $("rosterTeam");
 
-    if (!teamSelect) return;
+    if (!teamSelect)
+      return;
 
-    teamSelect.innerHTML = "";
+    if (!$("rosterLeague")) {
+      const wrapper =
+        teamSelect.parentElement || teamSelect;
 
-    const leagueSelect = document.createElement("select");
-    leagueSelect.id = "rosterLeague";
+      const leagueSelect =
+        document.createElement("select");
 
-    leagueSelect.innerHTML = `
-        <option value="Premier League">Premier League</option>
-        <option value="LaLiga">LaLiga</option>
-    `;
+      leagueSelect.id = "rosterLeague";
 
-    teamSelect.parentNode.insertBefore(
+      leagueSelect.innerHTML = `
+        <option value="Premier League">
+          Premier League
+        </option>
+        <option value="LaLiga">
+          LaLiga
+        </option>
+      `;
+
+      wrapper.insertBefore(
         leagueSelect,
         teamSelect
-    );
+      );
 
-    leagueSelect.addEventListener("change", () => {
-        game.roster.league = leagueSelect.value;
-        loadRosterTeams();
-    });
+      leagueSelect.addEventListener(
+        "change",
+        () => {
+          game.roster.league =
+            leagueSelect.value;
 
-    game.roster.league = "Premier League";
+          game.roster.team = "";
+          game.roster.players = [];
 
-    loadRosterTeams();
-}
-
-function loadRosterTeams() {
-
-    const teamSelect = $("rosterTeam");
-
-    if (!teamSelect) return;
-
-    teamSelect.innerHTML = "";
-
-    let teams = [];
-
-    if (game.roster.league === "Premier League") {
-        teams = CONFIG.premierLeagueTeams || [];
-    } else {
-        teams = CONFIG.laLigaTeams || [];
+          populateRosterTeams();
+          renderRosterPlayers();
+        }
+      );
     }
+  }
 
-    teams.forEach(team => {
+  function populateRosterTeams() {
+    const leagueSelect =
+      $("rosterLeague");
 
-        const option = document.createElement("option");
+    const teamSelect =
+      $("rosterTeam");
 
-        option.value = team;
-        option.textContent = team;
+    if (!teamSelect)
+      return;
 
-        teamSelect.appendChild(option);
-    });
+    const oldTeam =
+      game.roster.team;
 
-    if (teams.length > 0) {
-        game.roster.team = teams[0];
-    }
-
-    teamSelect.onchange = function () {
-        game.roster.team = this.value;
-        loadRosterPlayers();
-    };
-
-    loadRosterPlayers();
-}
-
-function loadRosterPlayers() {
-
-    const grid = $("rosterPlayers");
-
-    if (!grid) return;
-
-    grid.innerHTML = "";
-
-    const teamSelect = $("rosterTeam");
-
-    if (teamSelect) {
-        game.roster.team = teamSelect.value;
-    }
-
-    let players = getPlayersFromTeam(
-        game.roster.team
-    );
-
-    if (!players || players.length < 6) {
-        players = generateClubPlayers(
-            game.roster.team,
-            game.roster.league
-        );
-    }
-
-    players.forEach((player, index) => {
-
-        const card = document.createElement("div");
-
-        card.className = "player-card";
-
-        card.innerHTML = `
-            <div class="player-name">
-                ${escapeHTML(player.name)}
-            </div>
-
-            <div class="player-position">
-                ${escapeHTML(player.position)}
-            </div>
-
-            <div class="player-rating">
-                ${player.rating}
-            </div>
-        `;
-
-        card.onclick = () => {
-
-            const alreadySelected =
-                game.roster.players.some(
-                    p => p.name === player.name
-                );
-
-            if (alreadySelected) {
-
-                game.roster.players =
-                    game.roster.players.filter(
-                        p => p.name !== player.name
-                    );
-
-                card.classList.remove("selected");
-
-            } else {
-
-                if (game.roster.players.length >= 6) {
-                    notify("You can only select 6 players.");
-                    return;
-                }
-
-                game.roster.players.push(player);
-                card.classList.add("selected");
-            }
-
-            updateRosterSelection();
-        };
-
-        grid.appendChild(card);
-    });
-
-    game.roster.players = [];
-
-    updateRosterSelection();
-}
-
-function updateRosterSelection() {
-
-    const count = $("selectedCount");
-
-    if (count) {
-        count.textContent =
-            game.roster.players.length;
-    }
-
-    const startButton =
-        $("startRosterSeason");
-
-    if (startButton) {
-
-        startButton.disabled =
-            game.roster.players.length !== 6;
-    }
-}
-
-
-// ---------- START ROSTER SEASON ----------
-
-function startRosterSeason() {
-
-    if (game.roster.players.length !== 6) {
-
-        notify(
-            "Select exactly 6 players before starting."
-        );
-
-        return;
-    }
-
-    game.roster.season = {
-        currentMatch: 0,
-        points: 0,
-        wins: 0,
-        draws: 0,
-        losses: 0,
-        history: []
-    };
-
-    const season =
-        $("rosterSeason");
-
-    if (season) {
-        season.classList.remove("hidden");
-    }
-
-    updateRosterSeasonDisplay();
-
-    notify("Your 19-match season has started!");
-}
-
-
-// ---------- ROSTER MATCH ----------
-
-function playRosterMatch() {
-
-    if (
-        game.roster.season.currentMatch >=
-        CONFIG.seasonMatches
-    ) {
-
-        notify(
-            "The season is finished. Go to Presentations!"
-        );
-
-        return;
-    }
-
-    const squadRating =
-        calculateSquadRating(
-            game.roster.players
-        );
-
-    const opponentRating =
-        generateOpponentRating();
-
-    const result =
-        simulateMatch(
-            squadRating,
-            opponentRating
-        );
-
-    let points = 0;
-
-    if (result === "win") {
-        points = 100;
-        game.roster.season.wins++;
-    }
-
-    if (result === "draw") {
-        points = 50;
-        game.roster.season.draws++;
-    }
-
-    if (result === "loss") {
-        points = 0;
-        game.roster.season.losses++;
-    }
-
-    game.roster.season.points += points;
-    game.roster.season.currentMatch++;
-
-    const opponent =
-        randomOpponent(
-            game.roster.team
-        );
-
-    const homeScore =
-        result === "win"
-            ? randomNumber(2, 4)
-            : result === "draw"
-                ? randomNumber(0, 2)
-                : randomNumber(0, 1);
-
-    const awayScore =
-        result === "loss"
-            ? randomNumber(2, 4)
-            : result === "draw"
-                ? homeScore
-                : randomNumber(0, 1);
-
-    const match = {
-        match:
-            game.roster.season.currentMatch,
-
-        opponent: opponent,
-
-        result: result,
-
-        points: points,
-
-        homeScore: homeScore,
-
-        awayScore: awayScore
-    };
-
-    game.roster.season.history.push(match);
-
-    displayRosterMatch(match);
-
-    updateRosterSeasonDisplay();
-
-    saveGame(game);
-}
-
-
-// ---------- ROSTER MATCH DISPLAY ----------
-
-function displayRosterMatch(match) {
-
-    const title =
-        $("rosterMatchTitle");
-
-    const display =
-        $("rosterMatch");
-
-    if (title) {
-
-        title.textContent =
-            `Match ${match.match} of 19`;
-    }
-
-    if (display) {
-
-        const resultWord =
-            match.result === "win"
-                ? "beat"
-                : match.result === "draw"
-                    ? "drew with"
-                    : "lost to";
-
-        display.innerHTML = `
-            <div class="match-result">
-                <h2>
-                    ${escapeHTML(game.roster.team)}
-                    ${resultWord}
-                    ${escapeHTML(match.opponent)}
-                </h2>
-
-                <h1>
-                    ${match.homeScore}
-                    -
-                    ${match.awayScore}
-                </h1>
-
-                <p>
-                    ${match.points} points
-                </p>
-            </div>
-        `;
-    }
-}
-
-
-// ---------- PRESENTATIONS ----------
-
-function goToPresentations() {
-
-    const remaining =
-        CONFIG.seasonMatches -
-        game.roster.season.currentMatch;
-
-    if (remaining <= 0) {
-
-        showRosterPresentation();
-        return;
-    }
-
-    for (let i = 0; i < remaining; i++) {
-        playRosterMatch();
-    }
-
-    showRosterPresentation();
-}
-
-function showRosterPresentation() {
-
-    const results =
-        $("rosterResults");
-
-    if (!results) return;
-
-    results.innerHTML = `
-        <div class="presentation">
-            <h2>🏆 Season Presentation</h2>
-
-            <h3>
-                ${escapeHTML(game.roster.team)}
-            </h3>
-
-            <p>
-                ${game.roster.season.wins}
-                Wins
-            </p>
-
-            <p>
-                ${game.roster.season.draws}
-                Draws
-            </p>
-
-            <p>
-                ${game.roster.season.losses}
-                Losses
-            </p>
-
-            <h1>
-                ${game.roster.season.points}
-                Points
-            </h1>
-
-            <h3>Match Results</h3>
-
-            <div>
-                ${game.roster.season.history.map(match => `
-                    <p>
-                        Match ${match.match}:
-                        ${escapeHTML(match.opponent)}
-                        —
-                        ${match.homeScore}-${match.awayScore}
-                        —
-                        ${match.points} points
-                    </p>
-                `).join("")}
-            </div>
-        </div>
-    `;
-
-    updateStandings();
-}
-
-
-// ---------- STANDINGS ----------
-
-function updateStandings() {
-
-    const body =
-        $("standingsBody");
-
-    if (!body) return;
+    const league =
+      leagueSelect
+        ? leagueSelect.value
+        : game.roster.league;
 
     const teams =
-        game.roster.league === "Premier League"
-            ? CONFIG.premierLeagueTeams
-            : CONFIG.laLigaTeams;
-
-    body.innerHTML = "";
-
-    teams.forEach((team, index) => {
-
-        let points = 0;
-
-        if (team === game.roster.team) {
-            points =
-                game.roster.season.points;
-        } else {
-            points =
-                randomNumber(35, 95);
-        }
-
-        const row =
-            document.createElement("tr");
-
-        row.innerHTML = `
-            <td>${index + 1}</td>
-            <td>${escapeHTML(team)}</td>
-            <td>${points}</td>
-        `;
-
-        body.appendChild(row);
-    });
-}
-
-
-// ---------- ROSTER SEASON DISPLAY ----------
-
-function updateRosterSeasonDisplay() {
-
-    const seasonInfo =
-        $("rosterSeason");
-
-    if (!seasonInfo) return;
-
-    seasonInfo.innerHTML = `
-        <h2>
-            ${escapeHTML(game.roster.team)}
-        </h2>
-
-        <p>
-            Match:
-            ${game.roster.season.currentMatch}
-            / 19
-        </p>
-
-        <p>
-            Points:
-            ${game.roster.season.points}
-        </p>
-
-        <p>
-            Wins:
-            ${game.roster.season.wins}
-        </p>
-
-        <p>
-            Draws:
-            ${game.roster.season.draws}
-        </p>
-
-        <p>
-            Losses:
-            ${game.roster.season.losses}
-        </p>
-
-        <button onclick="goToPresentations()">
-            Go to Presentations
-        </button>
-    `;
-}
-
-
-// ---------- SUPER SQUAD ----------
-
-function setupSuperSquadMode() {
-
-    const gameBox =
-        $("superGame");
-
-    if (!game.superSquad.teamName) {
-
-        if (gameBox) {
-            gameBox.classList.add("hidden");
-        }
-
-        return;
-    }
-
-    const createBox =
-        $("createTeamBox");
-
-    if (createBox) {
-        createBox.classList.add("hidden");
-    }
-
-    if (gameBox) {
-        gameBox.classList.remove("hidden");
-    }
-
-    updateSuperSquadDisplay();
-}
-
-
-// ---------- CREATE TEAM ----------
-
-function createSuperTeam() {
-
-    const input =
-        $("teamName");
-
-    if (!input) return;
-
-    const name =
-        cleanTeamName(input.value);
-
-    if (!name) {
-
-        notify(
-            "Please enter a team name."
-        );
-
-        return;
-    }
-
-    game.superSquad.teamName =
-        name;
-
-    game.superSquad.points = 0;
-    game.superSquad.wins = 0;
-    game.superSquad.draws = 0;
-    game.superSquad.losses = 0;
-
-    game.superSquad.lineup = [];
-
-    game.superSquad.collection = [];
-
-    game.superSquad.season = {
-        currentMatch: 0,
-        history: []
-    };
-
-    saveGame(game);
-
-    setupSuperSquadMode();
-
-    notify(
-        `${name} has been created!`
-    );
-}
-
-
-// ---------- SUPER SQUAD DISPLAY ----------
-
-function updateSuperSquadDisplay() {
-
-    if ($("superTeamName")) {
-        $("superTeamName").textContent =
-            game.superSquad.teamName;
-    }
-
-    if ($("superPoints")) {
-        $("superPoints").textContent =
-            game.superSquad.points;
-    }
-
-    if ($("superWins")) {
-        $("superWins").textContent =
-            game.superSquad.wins;
-    }
-
-    if ($("superDraws")) {
-        $("superDraws").textContent =
-            game.superSquad.draws;
-    }
-
-    if ($("superLosses")) {
-        $("superLosses").textContent =
-            game.superSquad.losses;
-    }
-
-    if ($("lineupCount")) {
-        $("lineupCount").textContent =
-            game.superSquad.lineup.length;
-    }
-
-    displayCollection();
-    displayLineup();
-}
-
-
-// ---------- PACKS ----------
-
-function openBronzePack() {
-
-    if (game.superSquad.points < 50) {
-
-        notify(
-            "You need 50 points."
-        );
-
-        return;
-    }
-
-    game.superSquad.points -= 50;
-
-    const cards = [];
-
-    for (let i = 0; i < 5; i++) {
-
-        const player =
-            getPackPlayer(
-                "bronze"
-            );
-
-        cards.push(player);
-
-        addToCollection(player);
-    }
-
-    displayPackResults(
-        "Bronze Pack",
-        cards
-    );
-
-    updateSuperSquadDisplay();
-
-    saveGame(game);
-}
-
-function openGoldPack() {
-
-    if (game.superSquad.points < 100) {
-
-        notify(
-            "You need 100 points."
-        );
-
-        return;
-    }
-
-    game.superSquad.points -= 100;
-
-    const cards = [];
-
-    for (let i = 0; i < 5; i++) {
-
-        const player =
-            getPackPlayer(
-                "gold"
-            );
-
-        cards.push(player);
-
-        addToCollection(player);
-    }
-
-    displayPackResults(
-        "Gold Pack",
-        cards
-    );
-
-    updateSuperSquadDisplay();
-
-    saveGame(game);
-}
-
-
-// ---------- ICON PACK ----------
-
-function openIconPack() {
-
-    if (game.superSquad.points < 1000) {
-
-        notify(
-            "You need 1,000 points."
-        );
-
-        return;
-    }
-
-    game.superSquad.points -= 1000;
-
-    const icon =
-        getRandomIcon();
-
-    addToCollection(icon);
-
-    displayPackResults(
-        "Icon Pack",
-        [icon]
-    );
-
-    updateSuperSquadDisplay();
-
-    saveGame(game);
-}
-
-
-// ---------- COLLECTION ----------
-
-function addToCollection(player) {
-
-    const copy = {
-        ...player,
-        id:
-            createID()
-    };
-
-    game.superSquad.collection.push(
-        copy
-    );
-}
-
-function displayCollection() {
-
-    const collection =
-        $("collection");
-
-    if (!collection) return;
-
-    collection.innerHTML = "";
-
-    game.superSquad.collection.forEach(
-        player => {
-
-            const card =
-                document.createElement("div");
-
-            card.className =
-                "player-card";
-
-            card.innerHTML = `
-                <div>
-                    ${escapeHTML(player.name)}
-                </div>
-
-                <div>
-                    ${escapeHTML(player.position)}
-                </div>
-
-                <strong>
-                    ${player.rating}
-                </strong>
-
-                <div>
-                    ${player.rarity || "Common"}
-                </div>
-            `;
-
-            card.onclick = () => {
-
-                addToLineup(player);
-            };
-
-            collection.appendChild(card);
-        }
-    );
-}
-
-
-// ---------- LINEUP ----------
-
-function addToLineup(player) {
-
-    if (game.superSquad.lineup.length >= 11) {
-
-        notify(
-            "Your lineup already has 11 players."
-        );
-
-        return;
-    }
-
-    if (
-        game.superSquad.lineup.some(
-            p => p.id === player.id
+      leagueTeams(league);
+
+    teamSelect.innerHTML =
+      `<option value="">
+        Choose a team
+      </option>` +
+      teams
+        .map(team =>
+          `<option value="${esc(team)}">
+            ${esc(team)}
+          </option>`
         )
-    ) {
+        .join("");
 
-        notify(
-            "That player is already in your lineup."
+    if (teams.includes(oldTeam))
+      teamSelect.value = oldTeam;
+
+    teamSelect.onchange = () => {
+      game.roster.team =
+        teamSelect.value;
+
+      game.roster.players = [];
+
+      renderRosterPlayers();
+      save();
+    };
+  }
+
+  function openRoster() {
+    showScreen("rosterMode");
+
+    ensureRosterControls();
+
+    const league =
+      $("rosterLeague");
+
+    if (league)
+      league.value = game.roster.league;
+
+    populateRosterTeams();
+    renderRosterPlayers();
+    renderRosterSeason();
+  }
+
+  function renderRosterPlayers() {
+    const box =
+      $("rosterPlayers");
+
+    if (!box)
+      return;
+
+    const team =
+      game.roster.team;
+
+    const players =
+      team
+        ? playersForTeam(
+            team,
+            game.roster.league
+          )
+        : [];
+
+    const selected =
+      new Set(
+        game.roster.players.map(
+          player => player.id
+        )
+      );
+
+    box.innerHTML =
+      players.map((player, index) => `
+        <button
+          type="button"
+          class="player-card ${
+            selected.has(player.id)
+              ? "selected"
+              : ""
+          }"
+          data-roster-index="${index}"
+        >
+          <strong>
+            ${esc(player.name)}
+          </strong>
+
+          <span>
+            ${esc(player.position || "Player")}
+            •
+            ${clamp(player.rating, 1, 99)}
+          </span>
+        </button>
+      `).join("");
+
+    box
+      .querySelectorAll("[data-roster-index]")
+      .forEach(button => {
+        button.addEventListener(
+          "click",
+          () => {
+            const player =
+              players[
+                Number(
+                  button.dataset.rosterIndex
+                )
+              ];
+
+            if (!player)
+              return;
+
+            const existing =
+              game.roster.players.findIndex(
+                p => p.id === player.id
+              );
+
+            if (existing >= 0) {
+              game.roster.players.splice(
+                existing,
+                1
+              );
+            } else {
+              if (
+                game.roster.players.length >=
+                ROSTER_SIZE
+              ) {
+                notify(
+                  `You can select exactly ${ROSTER_SIZE} players.`
+                );
+
+                return;
+              }
+
+              game.roster.players.push(
+                clonePlayer(player)
+              );
+            }
+
+            updateRosterCount();
+            renderRosterPlayers();
+            save();
+          }
         );
+      });
 
-        return;
+    updateRosterCount();
+  }
+
+  function updateRosterCount() {
+    const el =
+      $("selectedCount");
+
+    if (el)
+      el.textContent =
+        `${game.roster.players.length}/${ROSTER_SIZE}`;
+  }
+
+  function startRoster() {
+    if (!game.roster.team) {
+      notify("Choose a team first.");
+      return;
     }
-
-    game.superSquad.lineup.push(
-        player
-    );
-
-    updateSuperSquadDisplay();
-
-    saveGame(game);
-}
-
-function removeFromLineup(id) {
-
-    game.superSquad.lineup =
-        game.superSquad.lineup.filter(
-            p => p.id !== id
-        );
-
-    updateSuperSquadDisplay();
-
-    saveGame(game);
-}
-
-function displayLineup() {
-
-    const lineup =
-        $("superLineup");
-
-    if (!lineup) return;
-
-    lineup.innerHTML = "";
-
-    game.superSquad.lineup.forEach(
-        player => {
-
-            const card =
-                document.createElement("div");
-
-            card.className =
-                "player-card lineup-card";
-
-            card.innerHTML = `
-                <strong>
-                    ${escapeHTML(player.name)}
-                </strong>
-
-                <span>
-                    ${player.rating}
-                </span>
-
-                <button>
-                    Remove
-                </button>
-            `;
-
-            card.querySelector("button")
-                .onclick = () => {
-
-                    removeFromLineup(
-                        player.id
-                    );
-                };
-
-            lineup.appendChild(card);
-        }
-    );
-}
-
-
-// ---------- PACK DISPLAY ----------
-
-function displayPackResults(
-    packName,
-    cards
-) {
-
-    const results =
-        $("packResults");
-
-    if (!results) return;
-
-    results.innerHTML = `
-        <h2>${packName}</h2>
-
-        <div class="pack-cards">
-
-            ${cards.map(player => `
-                <div class="player-card">
-
-                    <h3>
-                        ${escapeHTML(player.name)}
-                    </h3>
-
-                    <p>
-                        ${escapeHTML(player.team)}
-                    </p>
-
-                    <p>
-                        ${escapeHTML(player.position)}
-                    </p>
-
-                    <strong>
-                        ${player.rating}
-                    </strong>
-
-                    <p>
-                        ${player.rarity || "Common"}
-                    </p>
-
-                </div>
-            `).join("")}
-
-        </div>
-    `;
-}
-
-
-// ---------- SUPER SQUAD MATCH ----------
-
-function playSuperSquadMatch() {
 
     if (
-        game.superSquad.lineup.length !== 11
+      game.roster.players.length !==
+      ROSTER_SIZE
     ) {
+      notify(
+        `Pick exactly ${ROSTER_SIZE} players.`
+      );
 
-        notify(
-            "You need exactly 11 players in your lineup."
-        );
-
-        return;
+      return;
     }
 
-    const easy =
-        game.superSquad.difficulty ===
-        "Easy";
+    game.roster.match = 0;
+    game.roster.points = 0;
+    game.roster.wins = 0;
+    game.roster.draws = 0;
+    game.roster.losses = 0;
+    game.roster.results = [];
 
-    const opponentRating =
-        easy
-            ? randomNumber(72, 84)
-            : randomNumber(82, 95);
+    game.roster.standings =
+      makeStandings(
+        game.roster.league,
+        game.roster.team
+      );
 
-    const squadRating =
-        calculateSquadRating(
-            game.superSquad.lineup
-        );
+    save();
+    renderRosterSeason();
 
-    const result =
-        simulateMatch(
-            squadRating,
-            opponentRating
-        );
+    notify("Season started!");
+  }
 
-    let points = 0;
+  window.startRosterSeason =
+    startRoster;
 
-    if (result === "win") {
+  function rosterOpponent() {
+    const teams =
+      leagueTeams(
+        game.roster.league
+      ).filter(
+        team => team !== game.roster.team
+      );
 
-        points =
-            easy ? 100 : 200;
+    if (!teams.length)
+      return "League Opponent";
 
-        game.superSquad.wins++;
+    return teams[
+      game.roster.match %
+      teams.length
+    ];
+  }
+
+  function average(players) {
+    if (!players.length)
+      return 0;
+
+    return players.reduce(
+      (total, player) =>
+        total +
+        clamp(player.rating, 1, 99),
+      0
+    ) / players.length;
+  }
+
+  function simulate(teamA, teamB) {
+    const ratingA =
+      clamp(
+        average(teamA),
+        50,
+        99
+      );
+
+    const ratingB =
+      clamp(
+        average(teamB),
+        50,
+        99
+      );
+
+    const goalsA =
+      clamp(
+        Math.round(
+          Math.random() * 3 +
+          (ratingA - ratingB) / 18
+        ),
+        0,
+        5
+      );
+
+    const goalsB =
+      clamp(
+        Math.round(
+          Math.random() * 3 +
+          (ratingB - ratingA) / 18
+        ),
+        0,
+        5
+      );
+
+    return {
+      aGoals: goalsA,
+      bGoals: goalsB
+    };
+  }
+
+  function playRoster() {
+    if (
+      game.roster.players.length !==
+      ROSTER_SIZE
+    ) {
+      notify(
+        `Pick exactly ${ROSTER_SIZE} players.`
+      );
+
+      return;
     }
 
-    if (result === "draw") {
+    if (
+      game.roster.match >=
+      SEASON_MATCHES
+    ) {
+      notify(
+        "The season is already finished."
+      );
 
-        points =
-            easy ? 50 : 100;
-
-        game.superSquad.draws++;
+      return;
     }
-
-    if (result === "loss") {
-
-        points = 0;
-
-        game.superSquad.losses++;
-    }
-
-    game.superSquad.points +=
-        points;
-
-    game.superSquad.season.currentMatch++;
 
     const opponent =
-        randomOpponent(
-            "Super League"
-        );
+      rosterOpponent();
 
-    const match = {
-        match:
-            game.superSquad.season.currentMatch,
+    const opponentPlayers =
+      playersForTeam(
+        opponent,
+        game.roster.league
+      );
 
-        opponent: opponent,
+    const score =
+      simulate(
+        game.roster.players,
+        opponentPlayers
+      );
 
-        result: result,
+    const result =
+      score.aGoals > score.bGoals
+        ? "win"
+        : score.aGoals < score.bGoals
+          ? "loss"
+          : "draw";
 
-        points: points
-    };
+    const points =
+      result === "win"
+        ? 100
+        : result === "draw"
+          ? 50
+          : 0;
 
-    game.superSquad.season.history.push(
-        match
+    if (result === "win")
+      game.roster.wins++;
+
+    if (result === "draw")
+      game.roster.draws++;
+
+    if (result === "loss")
+      game.roster.losses++;
+
+    game.roster.points += points;
+    game.roster.match++;
+
+    game.roster.results.push({
+      match: game.roster.match,
+      opponent,
+      score:
+        `${score.aGoals}-${score.bGoals}`,
+      result,
+      points
+    });
+
+    updateStandingsAfterMatch(
+      opponent,
+      result,
+      score
     );
 
-    const results =
-        $("superResults");
-
-    if (results) {
-
-        results.innerHTML = `
-            <h2>
-                ${result.toUpperCase()}
-            </h2>
-
-            <p>
-                Your team played
-                ${escapeHTML(opponent)}
-            </p>
-
-            <h1>
-                +${points} points
-            </h1>
-
-            <p>
-                Opponent Rating:
-                ${opponentRating}
-            </p>
-        `;
-    }
-
-    updateSuperSquadDisplay();
-
-    saveGame(game);
-}
-
-
-// ---------- DIFFICULTY ----------
-
-function setDifficulty(level) {
-
-    if (
-        level !== "Easy" &&
-        level !== "Hard"
-    ) {
-        return;
-    }
-
-    game.superSquad.difficulty =
-        level;
+    save();
+    renderRosterSeason();
 
     notify(
-        `Difficulty set to ${level}`
+      `${game.roster.team} ${
+        result === "win"
+          ? "beat"
+          : result === "draw"
+            ? "drew with"
+            : "lost to"
+      } ${opponent} ${
+        score.aGoals
+      }-${score.bGoals} — ${
+        points
+      } points`
     );
+  }
 
-    saveGame(game);
-}
+  window.playRosterMatch =
+    playRoster;
 
-
-// ---------- RANDOM OPPONENT ----------
-
-function randomOpponent(exclude) {
-
-    let teams = [
-        ...(CONFIG.premierLeagueTeams || []),
-        ...(CONFIG.laLigaTeams || [])
-    ];
-
-    teams =
-        teams.filter(
-            team => team !== exclude
-        );
-
-    return randomItem(teams);
-}
-
-
-// ---------- SAVE / LOAD ----------
-
-function loadSavedGame() {
-
-    const saved =
-        loadGame();
-
-    if (!saved) return;
-
-    game = saved;
-
-    updateSuperSquadDisplay();
-}
-
-
-// ---------- BUTTON CONNECTIONS ----------
-
-document.addEventListener(
-    "DOMContentLoaded",
-    () => {
-
-        const startRoster =
-            $("startRosterSeason");
-
-        if (startRoster) {
-            startRoster.onclick =
-                startRosterSeason;
-        }
-
-        const playRoster =
-            $("playRosterMatch");
-
-        if (playRoster) {
-            playRoster.onclick =
-                playRosterMatch;
-        }
-
-        const createTeam =
-            $("createTeamButton");
-
-        if (createTeam) {
-            createTeam.onclick =
-                createSuperTeam;
-        }
-
-        const bronze =
-            $("bronzePack");
-
-        if (bronze) {
-            bronze.onclick =
-                openBronzePack;
-        }
-
-        const gold =
-            $("goldPack");
-
-        if (gold) {
-            gold.onclick =
-                openGoldPack;
-        }
-
-        const superMatch =
-            $("playSuperMatch");
-
-        if (superMatch) {
-            superMatch.onclick =
-                playSuperSquadMatch;
-        }
-
-        loadSavedGame();
-    }
-);
-
-
-// ==========================================
-// EXTRA SUPER SQUAD CONTROLS
-// ==========================================
-
-function createExtraControls() {
-
-    const gameBox =
-        $("superGame");
-
-    if (!gameBox) return;
-
-    if (!$("difficultyControls")) {
-
-        const controls =
-            document.createElement("div");
-
-        controls.id =
-            "difficultyControls";
-
-        controls.innerHTML = `
-            <h3>Difficulty</h3>
-
-            <button
-                onclick="setDifficulty('Easy')">
-                Easy
-            </button>
-
-            <button
-                onclick="setDifficulty('Hard')">
-                Hard
-            </button>
-
-            <button
-                onclick="openIconPack()">
-                Icon Pack — 1,000 Points
-            </button>
-        `;
-
-        gameBox.prepend(
-            controls
-        );
-    }
-}
-
-setTimeout(
-    createExtraControls,
-    500
-);
+  function makeStandings(
+    league,
+    userTeam
+  ) {
+    return leagueTeams(league).map(
+      team => ({
+        team,
+        played: 0,
+        wins
